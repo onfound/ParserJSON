@@ -4,9 +4,11 @@
 #include <stdlib.h>
 #include <mem.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include "Parser.h"
 
 static Token *tokensJSON;
+
 static Token *alloc_token(Parser *parser,
                           Token *tokens, size_t num_tokens) {
     Token *tok;
@@ -30,10 +32,12 @@ static void fill_token(Token *token, TokenType type,
 static TokenError parse_different(Parser *parser, const char *js,
                                   size_t len, Token *tokens, size_t num_tokens) {
     Token *token;
-    int start;
-    start = parser->position;
+    int start = parser->position;
+    TokenType tokenType;
     for (; parser->position < len && js[parser->position] != '\0'; parser->position++) {
         switch (js[parser->position]) {
+            // определяем что токен не являющийся массиовм или объектом или
+            // строкой завершился с помощью одного из следующих символов
             case '\t' :
             case '\r' :
             case '\n' :
@@ -42,26 +46,103 @@ static TokenError parse_different(Parser *parser, const char *js,
             case ']' :
             case '}' :
                 goto found;
+            default:
+                break;
         }
+
+        // бросаем ошибку потому что нашли символ который не входит в таблицу ASCII
         if (js[parser->position] < 32 || js[parser->position] >= 127) {
             parser->position = start;
             return ERROR_INVAL;
         }
     }
+
+    //сюда попадем если нашли токен, знаем его старт и конец и валидность символов внутри токена
     found:
+
+    //TODO: проверить это условие
     if (tokens == NULL) {
         parser->position--;
-        return 0;
+        return (TokenError) 0;
     }
+
+    //Находим тип
+    char *tokenString;
+    int length = parser->position - start;
+    int startName = 0;
+    char result[length];
+    subString(js, start, length, &tokenString);
+//    trim(tokenString, result, &startName);
+
+    if (strcmp(tokenString, "null") == 0) tokenType = NULL_VALUE;
+    else if (strcmp(tokenString, "true") == 0) tokenType = TRUE_VALUE;
+    else if (strcmp(tokenString, "false") == 0) tokenType = FALSE_VALUE;
+    else tokenType = NUMBER;
+
+    if (tokenType == NUMBER) {
+        //проверяем валидность числа
+        // 1) начинается с цифры или со знака минус
+        if (js[start] >= 0x30 && js[start] <= 0x39 || js[start] == '-') {
+            // 2) если начинается с цифры 0 и если все число не является 0, то обязательно должна быть плавающая точка
+            if (js[start] == '0' && start + 1 < parser->position && js[start + 1] != '.') return ERROR_INVAL;
+            //объявляем переменыые для уникальности одной точки в числе и експоненциальной формы
+            int i = 0;
+            bool hasFloat = false;
+            bool hasExp = false;
+            // смещаемся если был знак '-'
+            if (js[start] == '-') {
+                i = start + 1;
+            } else {
+                i = start;
+            }
+            // проверяем остальные числа
+            for (i; i < parser->position; ++i) {
+                // если это не последний символ и он равен точке - проверяем что точки еще не было и экспоненциалной формы,
+                // так как точка не может стоять после экспоненциальной формы, смещаемся если все норм :)
+                if (i < parser->position - 1 && js[i] == '.') {
+                    if (!hasFloat && !hasExp) {
+                        i++;
+                        hasFloat = true;
+                    } else return ERROR_INVAL;
+                }
+                //проверка экспоненциальной формы
+                if (i < parser->position - 1 && (js[i] == 'e' || js[i] == 'E')) {
+                    int offset = 1;
+                    if (js[i + 1] == '-' || js[i + 1] == '+') offset++;
+                    if (!hasExp) {
+                        i += offset;
+                        hasExp = true;
+                    } else return ERROR_INVAL;
+                }
+                //не является цифрой
+                if (js[i] < 0x30 || js[i] > 0x39) {
+                    return ERROR_INVAL;
+                }
+            }
+        } else return ERROR_INVAL;
+
+    }
+
+//выделяем память под токен
     token = alloc_token(parser, tokens, num_tokens);
+
+//если выделенная память на кол-во токенов заполнена (исчерпали все кол-во токенов в аргументах парсера)
     if (token == NULL) {
-        parser->position = start;
-        return ERROR_NOMEM;
+        parser->
+                position = start;
+        return
+                ERROR_NOMEM;
     }
-    fill_token(token, DIFFERENT, start, parser->position);
+
+//если все норм, то запоняем токен
+    fill_token(token, tokenType, start, parser
+            ->position);
+
+// откатываем позицию назад
     parser->position--;
     return 0;
 }
+
 
 static TokenError parse_string(Parser *parser, const char *js,
                                size_t len, Token *tokens, size_t num_tokens) {
@@ -119,7 +200,7 @@ static TokenError parse_string(Parser *parser, const char *js,
 }
 
 static TokenError parse(Parser *parser, const char *js, size_t len,
-                 Token *tokens, unsigned int countTokens) {
+                        Token *tokens, unsigned int countTokens) {
     TokenError r;
     int i;
     Token *tokenTemp;
@@ -209,6 +290,10 @@ static TokenError parse(Parser *parser, const char *js, size_t len,
                 break;
         }
     }
+    if (tokens != NULL && (tokens[0].type != OBJECT && tokens[0].type != ARRAY && tokens[0].type != TRUE_VALUE
+                           && tokens[0].type != FALSE_VALUE && tokens[0].type != NULL_VALUE)) {
+        return ERROR_INVAL;
+    }
     for (i = parser->toknext - 1; i >= 0; i--) {
         if (tokens[i].start != -1 && tokens[i].end == -1) {
             return ERROR_PART;
@@ -270,12 +355,19 @@ static char *concat(char *s1, char *s2) {
     return result;
 }
 
-char *getJsonLine(char *path) {
+char *getJsonInline(char *path) {
     return parseFromFile(path); //create String JSON without space and \n
 }
-Token getJSON(char *document){
-    return getJsonTokens(document)[0];
+
+/**
+ * Parse JSON String & convert to Tokens
+ * @return root Token (JSON)
+ */
+
+Token getJSON(char *inlineJSON) {
+    return getJsonTokens(inlineJSON)[0];
 }
+
 static Token *getJsonTokens(char *jsonLine) {
     unsigned count; //count of Token
     int err; //value Error
@@ -289,13 +381,26 @@ static Token *getJsonTokens(char *jsonLine) {
     }
     init(&p);
     err = parse(&p, jsonLine, strlen(jsonLine), tokensJSON, count);
+    switch (err) {
+        case ERROR_NOMEM:
+            perror("cant allocate memory for tokens");
+            exit(1);
+        case ERROR_INVAL:
+            perror("Illegal Arguments!");
+            exit(1);
+        case ERROR_PART:
+            perror("Error Parts");
+            exit(1);
+        default:
+            break;
+    }
     return tokensJSON;
 }
 
-Token getValue(Token token){
+Token getValue(Token token) {
     for (int i = 0; i < _msize(tokensJSON) / sizeof(Token); ++i) {
-        if (tokensJSON[i].start == token.start && tokensJSON[i].end == token.end){
-            return tokensJSON[i+1];
+        if (tokensJSON[i].start == token.start && tokensJSON[i].end == token.end) {
+            return tokensJSON[i + 1];
         }
     }
 }
@@ -310,16 +415,16 @@ void printToken(char *document, Token token) {
 Token *getChilds(Token token) {
     if (token.size == 0 || token.size == 1)
         return NULL;
-    Token * childs;
+    Token *childs;
     if (token.type == ARRAY) childs = calloc((size_t) token.size, sizeof(Token));
     else childs = calloc((size_t) token.size * 2, sizeof(Token));
     int countChild = 0;
     int tempRightBorder = 0;
     Token temp;
-    for (int i = 0; i < _msize(tokensJSON)/ sizeof(Token); ++i) {
+    for (int i = 0; i < _msize(tokensJSON) / sizeof(Token); ++i) {
         temp = tokensJSON[i];
-        if (temp.start > token.start && temp.end < token.end){
-            if (temp.end > tempRightBorder){
+        if (temp.start > token.start && temp.end < token.end) {
+            if (temp.end > tempRightBorder) {
                 tempRightBorder = temp.end;
                 childs[countChild] = temp;
                 countChild++;
@@ -330,18 +435,18 @@ Token *getChilds(Token token) {
 }
 
 Token *getChildKeys(Token parent) {
-    Token* childs = getChilds(parent);
+    Token *childs = getChilds(parent);
     Token *childsKey;
     int count = 0;
     if (childs == NULL)return NULL;
-    else{
-        for (int j = 0; j <  _msize(childs) / sizeof(Token) ; ++j) {
-            if (childs[j].type == STRING && childs[j].size ==1) count++;
+    else {
+        for (int j = 0; j < _msize(childs) / sizeof(Token); ++j) {
+            if (childs[j].type == STRING && childs[j].size == 1) count++;
         }
         childsKey = calloc((size_t) count, sizeof(Token));
         count = 0;
         for (int i = 0; i < _msize(childs) / sizeof(Token); ++i) {
-            if (childs[i].type == STRING && childs[i].size ==1) {
+            if (childs[i].type == STRING && childs[i].size == 1) {
                 childsKey[count] = childs[i];
                 count++;
             }

@@ -10,10 +10,13 @@
 #define N 80
 
 typedef enum {
-    DIFFERENT = 0,
+    NUMBER = 0,
     OBJECT = 1,
     ARRAY = 2,
-    STRING = 3
+    STRING = 3,
+    TRUE_VALUE = 4,
+    FALSE_VALUE = 5,
+    NULL_VALUE = 6
 } TokenType;
 
 typedef enum {
@@ -43,7 +46,7 @@ static char *parseFromFile(char name[]);
 
 static void init(Parser *parser);
 
-char *getJsonLine(char *path);
+char *getJsonInline(char *path);
 
 static Token *getJsonTokens(char *jsonLine);
 
@@ -56,7 +59,7 @@ Token *getChilds(Token token);
 Token getValue(Token token);
 
 static char *getValueStr(char *key, char *str, Token *tokens, int count);
-Token getJSON(char *document);
+Token getJSON(char *inlineJSON);
 
 static void subString(const char *string, int offset, int length, char **dst);
 
