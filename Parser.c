@@ -8,6 +8,7 @@
 #include "Parser.h"
 
 static Token *tokensJSON;
+static char *document;
 
 static Token *alloc_token(Parser *parser,
                           Token *tokens, size_t num_tokens) {
@@ -60,8 +61,8 @@ static TokenError parse_different(Parser *parser, const char *js,
     //сюда попадем если нашли токен, знаем его старт и конец и валидность символов внутри токена
     found:
 
-    //TODO: проверить это условие
-    if (tokens == NULL) {
+    //если режим подсчета токенов то ничего не делаем откатываем позицию и прерываем обработку токена
+    if (!tokens) {
         parser->position--;
         return (TokenError) 0;
     }
@@ -69,16 +70,12 @@ static TokenError parse_different(Parser *parser, const char *js,
     //Находим тип
     char *tokenString;
     int length = parser->position - start;
-    int startName = 0;
-    char result[length];
     subString(js, start, length, &tokenString);
-//    trim(tokenString, result, &startName);
 
     if (strcmp(tokenString, "null") == 0) tokenType = NULL_VALUE;
     else if (strcmp(tokenString, "true") == 0) tokenType = TRUE_VALUE;
     else if (strcmp(tokenString, "false") == 0) tokenType = FALSE_VALUE;
     else tokenType = NUMBER;
-
     if (tokenType == NUMBER) {
         //проверяем валидность числа
         // 1) начинается с цифры или со знака минус
@@ -127,16 +124,13 @@ static TokenError parse_different(Parser *parser, const char *js,
     token = alloc_token(parser, tokens, num_tokens);
 
 //если выделенная память на кол-во токенов заполнена (исчерпали все кол-во токенов в аргументах парсера)
-    if (token == NULL) {
-        parser->
-                position = start;
-        return
-                ERROR_NOMEM;
+    if (!token) {
+        parser->position = start;
+        return ERROR_NOMEM;
     }
 
-//если все норм, то запоняем токен
-    fill_token(token, tokenType, start, parser
-            ->position);
+//если все норм, то заполняем токен
+    fill_token(token, tokenType, start, parser->position);
 
 // откатываем позицию назад
     parser->position--;
@@ -146,23 +140,31 @@ static TokenError parse_different(Parser *parser, const char *js,
 
 static TokenError parse_string(Parser *parser, const char *js,
                                size_t len, Token *tokens, size_t num_tokens) {
+    //токен строки
     Token *token;
     int start = parser->position;
     parser->position++;
     for (; parser->position < len && js[parser->position] != '\0'; parser->position++) {
+        //символ строки
         char c = js[parser->position];
+        //нашли кавычку
         if (c == '\"') {
-            if (tokens == NULL) {
+            //если режим подсчета токенов, ниче не делаем возвращаем нолик :)
+            if (!tokens) {
                 return 0;
             }
+            // выделяем память под токен стринга
             token = alloc_token(parser, tokens, num_tokens);
-            if (token == NULL) {
+            // если исчерпали ресурс токенов (заданное кол-во)
+            if (!token) {
                 parser->position = start;
                 return ERROR_NOMEM;
             }
+            //заполняем токен
             fill_token(token, STRING, start + 1, parser->position);
             return 0;
         }
+        // если нашли обратный слэш и после него есть какой то символ
         if (c == '\\' && parser->position + 1 < len) {
             int i;
             parser->position++;
@@ -201,99 +203,171 @@ static TokenError parse_string(Parser *parser, const char *js,
 
 static TokenError parse(Parser *parser, const char *js, size_t len,
                         Token *tokens, unsigned int countTokens) {
+    HelpState helpState = UNDEFINED;
     TokenError r;
     int i;
     Token *tokenTemp;
+    TokenType tok;
+    // Подсчет кол-ва токенов
     int count = 0;
+    //пока не уткнулись в конец строки или не превысили указанный диапазон строки передвигаемся посимвольно
     for (; parser->position < len && js[parser->position] != '\0'; parser->position++) {
-        char c;
+        //определяем тип токена
         TokenType type;
-        c = js[parser->position];
+        //текущий символ
+        char c = js[parser->position];
+
         switch (c) {
+            // Если начало токена массива или объекта
             case '{':
             case '[':
+                // Мы нашли новый токен
                 count++;
-                if (tokens == NULL) { // режим подсчета токенов
+                // Если режим подсчета токенов, то посчитали и хватит :)
+                if (!tokens) {
                     break;
                 }
+                // выделяем токен
                 tokenTemp = alloc_token(parser, tokens, countTokens);
-                if (tokenTemp == NULL)
+                // если превысили допустимое кол-во токенов
+                if (!tokenTemp)
                     return ERROR_NOMEM;
+                if (c == '{' && helpState != UNDEFINED) helpState = UNDEFINED;
+                // если обрабатываем какой-то токен и нашли токен внутри него, то увеличиваем его кол-во детей
                 if (parser->toksuper != -1) {
                     tokens[parser->toksuper].size++;
                 }
+                // определяем что же ве таки объект или массив
                 tokenTemp->type = (c == '{' ? OBJECT : ARRAY);
+                // устанавливаем токену метку начала токена в строке
                 tokenTemp->start = parser->position;
+                // ставим родителя предпоследний токен
                 parser->toksuper = parser->toknext - 1;
                 break;
+                // Если закончился токен (массив/объект)
             case '}':
             case ']':
-                if (tokens == NULL)
+                // Если был режим подсчета, то ниче не делаем
+                if (!tokens)
                     break;
+                // определяем что тип токена
                 type = (c == '}' ? OBJECT : ARRAY);
+                if (c == '}') {
+                    if (helpState == COLUMN || helpState == UNDEFINED) {
+                        helpState = COLUMN;
+                    } else return ERROR_PART;
+                }
+                // пробегаемся по всем найденым токенам
                 for (i = parser->toknext - 1; i >= 0; i--) {
                     tokenTemp = &tokens[i];
+                    // если начало существует а конец еще не определен
                     if (tokenTemp->start != -1 && tokenTemp->end == -1) {
+                        // если найденный тип не соответсвует  Пример: {[ }]  скобка закончилась раньше
                         if (tokenTemp->type != type) {
                             return ERROR_INVAL;
                         }
+                        // сбрасываем текущий обрабатываемый токен
                         parser->toksuper = -1;
+                        // устанавливаем конец токена в строке
                         tokenTemp->end = parser->position + 1;
                         break;
                     }
                 }
+                // если не нашли обрабатываемый токен (когда кол-во закрывающих скобок больше начинающих)
                 if (i == -1) return ERROR_INVAL;
+                // доходим до конца массива токенов для того чтобы узнать позицию следующего обрабатываемого токена
                 for (; i >= 0; i--) {
                     tokenTemp = &tokens[i];
+                    // если не обработаный в плане границ токен то устанавливаем индекс текущего обрабатываемого токена
                     if (tokenTemp->start != -1 && tokenTemp->end == -1) {
+                        // текущий индекс токена в массиве токенов который мы обрабатываем
                         parser->toksuper = i;
                         break;
                     }
                 }
                 break;
+                // Если нашли кавычку
             case '\"':
+
+                // проверяем строку
                 r = parse_string(parser, js, len, tokens, countTokens);
+                // если поймали ошибку в формате строки то возвращаем код ошибки
                 if (r < 0) return r;
+                // токен строки считаем
                 count++;
-                if (parser->toksuper != -1 && tokens != NULL)
+                if (!tokens) break;
+                if (parser->toksuper == -1)
+                    return ERROR_PART;
+                if (helpState == UNDEFINED && tokens[parser->toksuper].type == OBJECT) helpState = COMMA;
+                if (tokens[parser->toksuper].type == OBJECT) {
+                    if (helpState == COMMA) helpState = KEY;
+                    else if (!helpState == COLUMN) return ERROR_PART;
+                }
+                // если режим не подсчета токенов и предок есть то увеличиваем кол-во чайлдов
+                if (parser->toksuper != -1 && tokens)
                     tokens[parser->toksuper].size++;
                 break;
+                // если управляющие символы или пробел то ничего не делаем
             case '\t' :
             case '\r' :
             case '\n' :
             case ' ':
                 break;
+                // нашли разделитель между ключем и значением
             case ':':
-                parser->toksuper = parser->toknext - 1;
+                //ставим родителя как предпоследний токен
+//                parser->toksuper = parser->toknext - 1;
+                if (!tokens)break;
+                if (helpState == KEY) helpState = COLUMN;
+                else return ERROR_PART;
                 break;
+                // если нашли разграничитель между токенами
             case ',':
-                if (tokens != NULL &&
-                    tokens[parser->toksuper].type != ARRAY &&
-                    tokens[parser->toksuper].type != OBJECT) {
+                // переопределяем ToSuper так как мы перечисляем токены в Toksuper
+                // если режим не подсчета токенов и мы находимся не в массиве и не в объекте
+                if (tokens && tokens[parser->toksuper].type == OBJECT) {
+                    if (helpState == COLUMN) helpState = COMMA;
+                    else {
+                        return ERROR_PART;
+                    }
+                }
+                if (tokens) {
+                    tok = tokens[parser->toksuper].type;
+                }
+                if (tokens && tokens[parser->toksuper].type != ARRAY && tokens[parser->toksuper].type != OBJECT) {
+                    // идем по всем токенам и находим самый близжайший массив или объект
                     for (i = parser->toknext - 1; i >= 0; i--) {
+                        // если токен равен объекту или массиву
                         if (tokens[i].type == ARRAY || tokens[i].type == OBJECT) {
+                            // если найденный токен не закрыт, то указываем родителя на него
                             if (tokens[i].start != -1 && tokens[i].end == -1) {
                                 parser->toksuper = i;
                                 break;
                             }
                         }
                     }
-
                 }
                 break;
+                //если нашли что то другое
             default:
+                //пробуем определить что это число/true/false/null
                 r = parse_different(parser, js, len, tokens, countTokens);
                 if (r < 0) return r;
+                //увеличиваем кол-во токенов если режим подсчета
                 count++;
-                if (parser->toksuper != -1 && tokens != NULL)
+                //увеличиваем кол-во чайлдов если режим не подсчета и мы обрабатываем какой то токен
+                if (parser->toksuper != -1 && tokens)
                     tokens[parser->toksuper].size++;
                 break;
         }
     }
-    if (tokens != NULL && (tokens[0].type != OBJECT && tokens[0].type != ARRAY && tokens[0].type != TRUE_VALUE
-                           && tokens[0].type != FALSE_VALUE && tokens[0].type != NULL_VALUE)) {
+// если режим не поиска кол-ва токенов то проверяем корневой токен на тип
+    if (tokens && (tokens[0].type != OBJECT && tokens[0].type != ARRAY && tokens[0].type != TRUE_VALUE
+                   && tokens[0].type != FALSE_VALUE && tokens[0].type != NULL_VALUE)) {
         return ERROR_INVAL;
     }
+// пробегаемся по всем токенам если они есть и проверяем на завершенность обработки
+// токенов
     for (i = parser->toknext - 1; i >= 0; i--) {
         if (tokens[i].start != -1 && tokens[i].end == -1) {
             return ERROR_PART;
@@ -360,42 +434,16 @@ char *getJsonInline(char *path) {
 }
 
 /**
- * Parse JSON String & convert to Tokens
+ * Convert JSON text in file to inline text
+ * Start parse JSON String & convert to Tokens
  * @return root Token (JSON)
  */
 
-Token getJSON(char *inlineJSON) {
-    return getJsonTokens(inlineJSON)[0];
+Token getJSON(char *JSON) {
+    document = getJsonInline(JSON);
+    return getJsonTokens()[0];
 }
 
-static Token *getJsonTokens(char *jsonLine) {
-    unsigned count; //count of Token
-    int err; //value Error
-    Parser p; //
-    init(&p);
-    count = parse(&p, jsonLine, strlen(jsonLine), NULL, 10);
-    tokensJSON = calloc(count, sizeof(Token));
-    if (tokensJSON == NULL) {
-        perror("cant allocate memory for tokens!");
-        exit(1);
-    }
-    init(&p);
-    err = parse(&p, jsonLine, strlen(jsonLine), tokensJSON, count);
-    switch (err) {
-        case ERROR_NOMEM:
-            perror("cant allocate memory for tokens");
-            exit(1);
-        case ERROR_INVAL:
-            perror("Illegal Arguments!");
-            exit(1);
-        case ERROR_PART:
-            perror("Error Parts");
-            exit(1);
-        default:
-            break;
-    }
-    return tokensJSON;
-}
 
 Token getValue(Token token) {
     for (int i = 0; i < _msize(tokensJSON) / sizeof(Token); ++i) {
@@ -405,7 +453,7 @@ Token getValue(Token token) {
     }
 }
 
-void printToken(char *document, Token token) {
+void printToken(Token token) {
     char *result;
     int size = token.end - token.start;
     subString(document, token.start, size, &result);
@@ -438,7 +486,7 @@ Token *getChildKeys(Token parent) {
     Token *childs = getChilds(parent);
     Token *childsKey;
     int count = 0;
-    if (childs == NULL)return NULL;
+    if (!childs)return NULL;
     else {
         for (int j = 0; j < _msize(childs) / sizeof(Token); ++j) {
             if (childs[j].type == STRING && childs[j].size == 1) count++;
@@ -474,6 +522,43 @@ static void subString(const char *string, int offset, int length, char **dst) {
     for (int i = 0; i < length; ++i) {
         (*dst)[i] = string[offset + i];
     }
+}
+
+/**
+ * Parse JSON String & convert to Tokens
+ * @return root Token (JSON)
+ */
+
+Token *getJsonTokens() {
+    char *jsonLine = document;
+    unsigned count; //count of Token
+    int err; //value Error
+    Parser p; //parser
+    init(&p);
+    // за первый проход считаем кол-во токенов для того чтобы выделить память
+    count = parse(&p, jsonLine, strlen(jsonLine), NULL, 10);
+    // выделяем память для массива токенов
+    tokensJSON = calloc(count, sizeof(Token));
+    if (!tokensJSON) {
+        perror("cant allocate memory for tokens!");
+        exit(1);
+    }
+    init(&p);
+    err = parse(&p, jsonLine, strlen(jsonLine), tokensJSON, count);
+    switch (err) {
+        case ERROR_NOMEM:
+            perror("cant allocate memory for tokens");
+            exit(1);
+        case ERROR_INVAL:
+            perror("Illegal Arguments!");
+            exit(1);
+        case ERROR_PART:
+            perror("Error Parts");
+            exit(1);
+        default:
+            break;
+    }
+    return tokensJSON;
 }
 
 static void init(Parser *parser) {

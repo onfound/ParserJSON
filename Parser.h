@@ -32,6 +32,13 @@ typedef struct {
     int size;
 } Token;
 
+typedef enum {
+    UNDEFINED = 0,
+    KEY = 1,
+    COLUMN = 2,
+    COMMA = 3
+} HelpState;
+
 typedef struct {
     unsigned int position;
     unsigned int toknext;
@@ -48,11 +55,11 @@ static void init(Parser *parser);
 
 char *getJsonInline(char *path);
 
-static Token *getJsonTokens(char *jsonLine);
+Token *getJsonTokens();
 
 Token *getChildKeys(Token parent);
 
-void printToken(char *document, Token token);
+void printToken(Token token);
 
 Token *getChilds(Token token);
 
