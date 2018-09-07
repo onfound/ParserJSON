@@ -147,6 +147,9 @@ static TokenError parse_string(Parser *parser, const char *js,
     for (; parser->position < len && js[parser->position] != '\0'; parser->position++) {
         //символ строки
         char c = js[parser->position];
+        if (c == '\t') {
+            return ERROR_INVAL;
+        }
         //нашли кавычку
         if (c == '\"') {
             //если режим подсчета токенов, ниче не делаем возвращаем нолик :)
@@ -291,8 +294,11 @@ static TokenError parse(Parser *parser, const char *js, size_t len,
 
                 // проверяем строку
                 r = parse_string(parser, js, len, tokens, countTokens);
+                if (r < 0){
+                    printf("sad = %d", r);
+                    return r;
+                }
                 // если поймали ошибку в формате строки то возвращаем код ошибки
-                if (r < 0) return r;
                 // токен строки считаем
                 count++;
                 if (!tokens) break;
@@ -531,12 +537,29 @@ static void subString(const char *string, int offset, int length, char **dst) {
 
 Token *getJsonTokens() {
     char *jsonLine = document;
-    unsigned count; //count of Token
+    int count; //count of Token
     int err; //value Error
     Parser p; //parser
     init(&p);
     // за первый проход считаем кол-во токенов для того чтобы выделить память
     count = parse(&p, jsonLine, strlen(jsonLine), NULL, 10);
+    printf("ad");
+    if (count < 0) {
+        switch (count) {
+            case ERROR_NOMEM:
+                perror("cant allocate memory for tokens");
+                exit(1);
+            case ERROR_INVAL:
+                perror("Illegal Arguments!");
+                exit(1);
+            case ERROR_PART:
+                perror("Error Parts");
+                exit(1);
+            default:
+                perror("Unsupported Error");
+                exit(1);
+        }
+    }
     // выделяем память для массива токенов
     tokensJSON = calloc(count, sizeof(Token));
     if (!tokensJSON) {
@@ -545,18 +568,21 @@ Token *getJsonTokens() {
     }
     init(&p);
     err = parse(&p, jsonLine, strlen(jsonLine), tokensJSON, count);
-    switch (err) {
-        case ERROR_NOMEM:
-            perror("cant allocate memory for tokens");
-            exit(1);
-        case ERROR_INVAL:
-            perror("Illegal Arguments!");
-            exit(1);
-        case ERROR_PART:
-            perror("Error Parts");
-            exit(1);
-        default:
-            break;
+    if (err < 0) {
+        switch (err) {
+            case ERROR_NOMEM:
+                perror("cant allocate memory for tokens");
+                exit(1);
+            case ERROR_INVAL:
+                perror("Illegal Arguments!");
+                exit(1);
+            case ERROR_PART:
+                perror("Error Parts");
+                exit(1);
+            default:
+                perror("Unsupported Error");
+                exit(1);
+        }
     }
     return tokensJSON;
 }

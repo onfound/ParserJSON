@@ -65,6 +65,8 @@ Token *getChilds(Token token);
 
 Token getValue(Token token);
 
+static void throwError(int *errorCode);
+
 static char *getValueStr(char *key, char *str, Token *tokens, int count);
 Token getJSON(char *inlineJSON);
 
