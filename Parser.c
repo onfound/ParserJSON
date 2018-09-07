@@ -147,7 +147,7 @@ static TokenError parse_string(Parser *parser, const char *js,
     for (; parser->position < len && js[parser->position] != '\0'; parser->position++) {
         //символ строки
         char c = js[parser->position];
-        if (c == '\t') {
+        if (c == '\t' || c == '\n') {
             return ERROR_INVAL;
         }
         //нашли кавычку
@@ -210,7 +210,6 @@ static TokenError parse(Parser *parser, const char *js, size_t len,
     TokenError r;
     int i;
     Token *tokenTemp;
-    TokenType tok;
     // Подсчет кол-ва токенов
     int count = 0;
     //пока не уткнулись в конец строки или не превысили указанный диапазон строки передвигаемся посимвольно
@@ -294,10 +293,8 @@ static TokenError parse(Parser *parser, const char *js, size_t len,
 
                 // проверяем строку
                 r = parse_string(parser, js, len, tokens, countTokens);
-                if (r < 0){
-                    printf("sad = %d", r);
-                    return r;
-                }
+                if (r < 0)return r;
+
                 // если поймали ошибку в формате строки то возвращаем код ошибки
                 // токен строки считаем
                 count++;
@@ -336,9 +333,6 @@ static TokenError parse(Parser *parser, const char *js, size_t len,
                     else {
                         return ERROR_PART;
                     }
-                }
-                if (tokens) {
-                    tok = tokens[parser->toksuper].type;
                 }
                 if (tokens && tokens[parser->toksuper].type != ARRAY && tokens[parser->toksuper].type != OBJECT) {
                     // идем по всем токенам и находим самый близжайший массив или объект
@@ -403,7 +397,7 @@ static char *parseFromFile(char name[]) {
 static void trim(char *line, char *y, int *startName) {
     int newSize = N;
     for (int i = 0; i < N; ++i) {
-        if (line[i] != '\n') {
+        if (line[i] != '\n' || *startName == 1) {
             if (line[i] == ' ') {
                 if (*startName == 1) {
                     y[i - (N - newSize)] = line[i];
@@ -543,7 +537,6 @@ Token *getJsonTokens() {
     init(&p);
     // за первый проход считаем кол-во токенов для того чтобы выделить память
     count = parse(&p, jsonLine, strlen(jsonLine), NULL, 10);
-    printf("ad");
     if (count < 0) {
         switch (count) {
             case ERROR_NOMEM:

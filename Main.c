@@ -5,7 +5,7 @@ int main(void) {
     /**
      * SAX ParserJSON
      **/
-    Token JSON = getJSON("C:\\Users\\ilyad\\CLionProjects\\ParserJSON\\testsJSON\\fail27.json");
+    Token JSON = getJSON("C:\\Users\\ilyad\\CLionProjects\\ParserJSON\\testsJSON\\pass1.json");
     Token * tokens = getJsonTokens();
     for (int i = 0; i < tokens->size; ++i) {
 //        printToken(tokens[i]);
