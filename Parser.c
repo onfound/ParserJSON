@@ -10,6 +10,16 @@
 static Token *tokensJSON;
 static char *document;
 
+static void (*startDocumentCallback)();
+
+static void (*endDocumentCallback)();
+
+static void (*startElementCallback)(TokenType tokenType);
+
+static void (*endElementCallback)(TokenType tokenType);
+
+static void (*charactersCallback)(Token token);
+
 static Token *alloc_token(Parser *parser,
                           Token *tokens, size_t num_tokens) {
     Token *tok;
@@ -28,6 +38,7 @@ static void fill_token(Token *token, TokenType type,
     token->start = start;
     token->end = end;
     token->size = 0;
+    charactersCallback(*token);
 }
 
 static TokenError parse_different(Parser *parser, const char *js,
@@ -76,12 +87,13 @@ static TokenError parse_different(Parser *parser, const char *js,
     else if (strcmp(tokenString, "true") == 0) tokenType = TRUE_VALUE;
     else if (strcmp(tokenString, "false") == 0) tokenType = FALSE_VALUE;
     else tokenType = NUMBER;
+    startElementCallback(tokenType);
     if (tokenType == NUMBER) {
         //проверяем валидность числа
         // 1) начинается с цифры или со знака минус
         if (js[start] >= 0x30 && js[start] <= 0x39 || js[start] == '-') {
             // 2) если начинается с цифры 0 и если все число не является 0, то обязательно должна быть плавающая точка
-            if (js[start] == '0' && start + 1 < parser->position && js[start + 1] != '.') return ERROR_INVAL;
+            if (js[start] == '0' && start + 1 < parser->position && js[start + 1] != '.') return ERROR_NUMBER;
             //объявляем переменыые для уникальности одной точки в числе и експоненциальной формы
             int i = 0;
             bool hasFloat = false;
@@ -100,7 +112,7 @@ static TokenError parse_different(Parser *parser, const char *js,
                     if (!hasFloat && !hasExp) {
                         i++;
                         hasFloat = true;
-                    } else return ERROR_INVAL;
+                    } else return ERROR_NUMBER;
                 }
                 //проверка экспоненциальной формы
                 if (i < parser->position - 1 && (js[i] == 'e' || js[i] == 'E')) {
@@ -109,16 +121,17 @@ static TokenError parse_different(Parser *parser, const char *js,
                     if (!hasExp) {
                         i += offset;
                         hasExp = true;
-                    } else return ERROR_INVAL;
+                    } else return ERROR_NUMBER;
                 }
                 //не является цифрой
                 if (js[i] < 0x30 || js[i] > 0x39) {
-                    return ERROR_INVAL;
+                    return ERROR_NUMBER;
                 }
             }
         } else return ERROR_INVAL;
 
     }
+
 
 //выделяем память под токен
     token = alloc_token(parser, tokens, num_tokens);
@@ -131,8 +144,9 @@ static TokenError parse_different(Parser *parser, const char *js,
 
 //если все норм, то заполняем токен
     fill_token(token, tokenType, start, parser->position);
-
 // откатываем позицию назад
+
+    endElementCallback(tokenType);
     parser->position--;
     return 0;
 }
@@ -144,11 +158,14 @@ static TokenError parse_string(Parser *parser, const char *js,
     Token *token;
     int start = parser->position;
     parser->position++;
+    if (tokens) {
+        startElementCallback(STRING);
+    }
     for (; parser->position < len && js[parser->position] != '\0'; parser->position++) {
         //символ строки
         char c = js[parser->position];
         if (c == '\t' || c == '\n') {
-            return ERROR_INVAL;
+            return ERROR_STRING;
         }
         //нашли кавычку
         if (c == '\"') {
@@ -196,7 +213,7 @@ static TokenError parse_string(Parser *parser, const char *js,
                     break;
                 default:
                     parser->position = start;
-                    return ERROR_INVAL;
+                    return ERROR_BACKSLASH;
             }
         }
     }
@@ -212,6 +229,8 @@ static TokenError parse(Parser *parser, const char *js, size_t len,
     Token *tokenTemp;
     // Подсчет кол-ва токенов
     int count = 0;
+    if (tokens)
+        startDocumentCallback();
     //пока не уткнулись в конец строки или не превысили указанный диапазон строки передвигаемся посимвольно
     for (; parser->position < len && js[parser->position] != '\0'; parser->position++) {
         //определяем тип токена
@@ -229,6 +248,8 @@ static TokenError parse(Parser *parser, const char *js, size_t len,
                 if (!tokens) {
                     break;
                 }
+                if (c == '{')startElementCallback(OBJECT);
+                else startElementCallback(ARRAY);
                 // выделяем токен
                 tokenTemp = alloc_token(parser, tokens, countTokens);
                 // если превысили допустимое кол-во токенов
@@ -257,7 +278,7 @@ static TokenError parse(Parser *parser, const char *js, size_t len,
                 if (c == '}') {
                     if (helpState == COLUMN || helpState == UNDEFINED) {
                         helpState = COLUMN;
-                    } else return ERROR_PART;
+                    } else return ERROR_OBJECT_PART;
                 }
                 // пробегаемся по всем найденым токенам
                 for (i = parser->toknext - 1; i >= 0; i--) {
@@ -266,17 +287,18 @@ static TokenError parse(Parser *parser, const char *js, size_t len,
                     if (tokenTemp->start != -1 && tokenTemp->end == -1) {
                         // если найденный тип не соответсвует  Пример: {[ }]  скобка закончилась раньше
                         if (tokenTemp->type != type) {
-                            return ERROR_INVAL;
+                            return ERROR_PART;
                         }
                         // сбрасываем текущий обрабатываемый токен
                         parser->toksuper = -1;
                         // устанавливаем конец токена в строке
                         tokenTemp->end = parser->position + 1;
+                        charactersCallback(*tokenTemp);
                         break;
                     }
                 }
                 // если не нашли обрабатываемый токен (когда кол-во закрывающих скобок больше начинающих)
-                if (i == -1) return ERROR_INVAL;
+                if (i == -1) return ERROR_PART;
                 // доходим до конца массива токенов для того чтобы узнать позицию следующего обрабатываемого токена
                 for (; i >= 0; i--) {
                     tokenTemp = &tokens[i];
@@ -287,6 +309,8 @@ static TokenError parse(Parser *parser, const char *js, size_t len,
                         break;
                     }
                 }
+                if (c == '{')endElementCallback(OBJECT);
+                else endElementCallback(ARRAY);
                 break;
                 // Если нашли кавычку
             case '\"':
@@ -300,15 +324,17 @@ static TokenError parse(Parser *parser, const char *js, size_t len,
                 count++;
                 if (!tokens) break;
                 if (parser->toksuper == -1)
-                    return ERROR_PART;
+                    return ERROR_ROOT_TOKEN;
                 if (helpState == UNDEFINED && tokens[parser->toksuper].type == OBJECT) helpState = COMMA;
                 if (tokens[parser->toksuper].type == OBJECT) {
                     if (helpState == COMMA) helpState = KEY;
-                    else if (!helpState == COLUMN) return ERROR_PART;
+                    else if (!helpState == COLUMN)
+                        return ERROR_OBJECT_PART;
                 }
                 // если режим не подсчета токенов и предок есть то увеличиваем кол-во чайлдов
                 if (parser->toksuper != -1 && tokens)
                     tokens[parser->toksuper].size++;
+                endElementCallback(STRING);
                 break;
                 // если управляющие символы или пробел то ничего не делаем
             case '\t' :
@@ -321,8 +347,9 @@ static TokenError parse(Parser *parser, const char *js, size_t len,
                 //ставим родителя как предпоследний токен
 //                parser->toksuper = parser->toknext - 1;
                 if (!tokens)break;
+                if (tokens[parser->toksuper].type != OBJECT) return ERROR_CHARACTER;
                 if (helpState == KEY) helpState = COLUMN;
-                else return ERROR_PART;
+                else return ERROR_OBJECT_PART;
                 break;
                 // если нашли разграничитель между токенами
             case ',':
@@ -331,7 +358,7 @@ static TokenError parse(Parser *parser, const char *js, size_t len,
                 if (tokens && tokens[parser->toksuper].type == OBJECT) {
                     if (helpState == COLUMN) helpState = COMMA;
                     else {
-                        return ERROR_PART;
+                        return ERROR_OBJECT_PART;
                     }
                 }
                 if (tokens && tokens[parser->toksuper].type != ARRAY && tokens[parser->toksuper].type != OBJECT) {
@@ -364,7 +391,7 @@ static TokenError parse(Parser *parser, const char *js, size_t len,
 // если режим не поиска кол-ва токенов то проверяем корневой токен на тип
     if (tokens && (tokens[0].type != OBJECT && tokens[0].type != ARRAY && tokens[0].type != TRUE_VALUE
                    && tokens[0].type != FALSE_VALUE && tokens[0].type != NULL_VALUE)) {
-        return ERROR_INVAL;
+        return ERROR_ROOT_TOKEN;
     }
 // пробегаемся по всем токенам если они есть и проверяем на завершенность обработки
 // токенов
@@ -373,6 +400,8 @@ static TokenError parse(Parser *parser, const char *js, size_t len,
             return ERROR_PART;
         }
     }
+    if (tokens)
+        endDocumentCallback();
     return count;
 }
 
@@ -439,7 +468,13 @@ char *getJsonInline(char *path) {
  * @return root Token (JSON)
  */
 
-Token getJSON(char *JSON) {
+Token getJSON(char *JSON, void (*startDocument)(), void (*endDocument)(), void (*startElement)(TokenType),
+              void (*endElement)(TokenType), void (*characters)(Token)) {
+    startDocumentCallback = startDocument;
+    endDocumentCallback = endDocument;
+    startElementCallback = startElement;
+    endElementCallback = endElement;
+    charactersCallback = characters;
     document = getJsonInline(JSON);
     return getJsonTokens()[0];
 }
@@ -538,46 +573,58 @@ Token *getJsonTokens() {
     // за первый проход считаем кол-во токенов для того чтобы выделить память
     count = parse(&p, jsonLine, strlen(jsonLine), NULL, 10);
     if (count < 0) {
-        switch (count) {
-            case ERROR_NOMEM:
-                perror("cant allocate memory for tokens");
-                exit(1);
-            case ERROR_INVAL:
-                perror("Illegal Arguments!");
-                exit(1);
-            case ERROR_PART:
-                perror("Error Parts");
-                exit(1);
-            default:
-                perror("Unsupported Error");
-                exit(1);
-        }
+        throwError(count);
     }
     // выделяем память для массива токенов
     tokensJSON = calloc(count, sizeof(Token));
     if (!tokensJSON) {
-        perror("cant allocate memory for tokens!");
-        exit(1);
+        throwError(ERROR_ALLOCATE);
     }
     init(&p);
     err = parse(&p, jsonLine, strlen(jsonLine), tokensJSON, count);
     if (err < 0) {
-        switch (err) {
-            case ERROR_NOMEM:
-                perror("cant allocate memory for tokens");
-                exit(1);
-            case ERROR_INVAL:
-                perror("Illegal Arguments!");
-                exit(1);
-            case ERROR_PART:
-                perror("Error Parts");
-                exit(1);
-            default:
-                perror("Unsupported Error");
-                exit(1);
-        }
+        throwError(err);
     }
     return tokensJSON;
+}
+
+static void throwError(int error) {
+    switch (error) {
+        case ERROR_ROOT_TOKEN:
+            perror("Undefined JSON ROOT. A JSON payload should be an object or array");
+            break;
+        case ERROR_NUMBER:
+            perror("The number must be in the correct form");
+            break;
+        case ERROR_BACKSLASH:
+            perror("Undefined control character");
+            break;
+        case ERROR_NOMEM:
+            perror("cant allocate memory for tokens");
+            break;
+        case ERROR_INVAL:
+            perror("Illegal Arguments!");
+            break;
+        case ERROR_PART:
+            perror("Uncorret part");
+            break;
+        case ERROR_CHARACTER:
+            perror("Undefined character ':'");
+            break;
+        case ERROR_OBJECT_PART:
+            perror("Object in JSON should be {\"key\": value, \"key\":value}");
+            break;
+        case ERROR_STRING:
+            perror("String is broken");
+            break;
+        case ERROR_ALLOCATE:
+            perror("Can't allocate memory for tokens!");
+            break;
+        default:
+            perror("Unsupported Error");
+            break;
+    }
+    exit(1);
 }
 
 static void init(Parser *parser) {

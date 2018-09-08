@@ -20,9 +20,16 @@ typedef enum {
 } TokenType;
 
 typedef enum {
-    ERROR_NOMEM = -1,
-    ERROR_INVAL = -2,
-    ERROR_PART = -3
+    ERROR_ROOT_TOKEN = -1,
+    ERROR_NUMBER = -2,
+    ERROR_BACKSLASH = -3,
+    ERROR_OBJECT_PART = -4,
+    ERROR_CHARACTER = -5,
+    ERROR_STRING = -6,
+    ERROR_NOMEM = -7,
+    ERROR_INVAL = -8,
+    ERROR_PART = -9,
+    ERROR_ALLOCATE = -10
 } TokenError;
 
 typedef struct {
@@ -65,10 +72,12 @@ Token *getChilds(Token token);
 
 Token getValue(Token token);
 
-static void throwError(int *errorCode);
+static void throwError(int error);
 
 static char *getValueStr(char *key, char *str, Token *tokens, int count);
-Token getJSON(char *inlineJSON);
+
+Token getJSON(char *JSON, void (*startDocument)(), void (*endDocument)()
+        , void (*startElement)(TokenType), void (*endElement)(TokenType), void (*characters)(Token));
 
 static void subString(const char *string, int offset, int length, char **dst);
 
