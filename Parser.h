@@ -52,36 +52,36 @@ typedef struct {
     int toksuper;
 } Parser;
 
-static void trim(char *line, char *y, int *startName);
+void trim(char *line, char *y, int *startName);
 
-static char *concat(char *s1, char *s2);
+char *concat(char *s1, char *s2);
 
-static char *parseFromFile(char name[]);
+char *parseFromFile(char name[]);
 
-static void init(Parser *parser);
+void init(Parser *parser);
 
 char *getJsonInline(char *path);
 
 Token *getJsonTokens();
 
-Token *getChildKeys(Token parent);
+//Token *getChildKeys(Token parent);
 
 void printToken(Token token);
 
-Token *getChilds(Token token);
+//Token *getChilds(Token token);
 
-Token getValue(Token token);
+//Token getValue(Token token);
 
-static void throwError(int error);
+void throwError(int error);
 
-static char *getValueStr(char *key, char *str, Token *tokens, int count);
+//static char *getValueStr(char *key, char *str, Token *tokens, int count);
 
 Token getJSON(char *JSON, void (*startDocument)(), void (*endDocument)()
         , void (*startElement)(TokenType), void (*endElement)(TokenType), void (*characters)(Token));
 
-static void subString(const char *string, int offset, int length, char **dst);
+void subString(const char *string, int offset, int length, char **dst);
 
-static TokenError parse(Parser *parser, const char *js, size_t len,
+TokenError parse(Parser *parser, const char *js, size_t len,
                  Token *tokens, unsigned int countTokens);
 
 #endif

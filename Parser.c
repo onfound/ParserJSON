@@ -1,6 +1,7 @@
 //
 // Created by ilyad on 26.05.2018.
 //
+
 #include <stdlib.h>
 #include <mem.h>
 #include <stdio.h>
@@ -20,7 +21,7 @@ static void (*endElementCallback)(TokenType tokenType);
 
 static void (*charactersCallback)(Token token);
 
-static Token *alloc_token(Parser *parser,
+Token *alloc_token(Parser *parser,
                           Token *tokens, size_t num_tokens) {
     Token *tok;
     if (parser->toknext >= num_tokens) {
@@ -41,7 +42,7 @@ static void fill_token(Token *token, TokenType type,
     charactersCallback(*token);
 }
 
-static TokenError parse_different(Parser *parser, const char *js,
+TokenError parse_different(Parser *parser, const char *js,
                                   size_t len, Token *tokens, size_t num_tokens) {
     Token *token;
     int start = parser->position;
@@ -152,7 +153,7 @@ static TokenError parse_different(Parser *parser, const char *js,
 }
 
 
-static TokenError parse_string(Parser *parser, const char *js,
+TokenError parse_string(Parser *parser, const char *js,
                                size_t len, Token *tokens, size_t num_tokens) {
     //токен строки
     Token *token;
@@ -221,7 +222,7 @@ static TokenError parse_string(Parser *parser, const char *js,
     return ERROR_PART;
 }
 
-static TokenError parse(Parser *parser, const char *js, size_t len,
+TokenError parse(Parser *parser, const char *js, size_t len,
                         Token *tokens, unsigned int countTokens) {
     HelpState helpState = UNDEFINED;
     TokenError r;
@@ -405,7 +406,7 @@ static TokenError parse(Parser *parser, const char *js, size_t len,
     return count;
 }
 
-static char *parseFromFile(char name[]) {
+char *parseFromFile(char name[]) {
     FILE *fp;
     char line[N];
     char refactorLine[N];
@@ -413,6 +414,10 @@ static char *parseFromFile(char name[]) {
     memset(refactorLine, 0, sizeof refactorLine);
     int startName = 0;
     fp = fopen(name, "r");
+    if (fp == NULL){
+        perror("File not found");
+        exit(1);
+    }
     while (fgets(line, N, fp) != NULL) {
         trim(line, refactorLine, &startName);
         first = concat(first, refactorLine);
@@ -423,7 +428,7 @@ static char *parseFromFile(char name[]) {
 }
 
 
-static void trim(char *line, char *y, int *startName) {
+void trim(char *line, char *y, int *startName) {
     int newSize = N;
     for (int i = 0; i < N; ++i) {
         if (line[i] != '\n' || *startName == 1) {
@@ -444,7 +449,7 @@ static void trim(char *line, char *y, int *startName) {
     }
 }
 
-static char *concat(char *s1, char *s2) {
+char *concat(char *s1, char *s2) {
 
     size_t len1 = strlen(s1);
     size_t len2 = strlen(s2);
@@ -480,13 +485,13 @@ Token getJSON(char *JSON, void (*startDocument)(), void (*endDocument)(), void (
 }
 
 
-Token getValue(Token token) {
-    for (int i = 0; i < _msize(tokensJSON) / sizeof(Token); ++i) {
-        if (tokensJSON[i].start == token.start && tokensJSON[i].end == token.end) {
-            return tokensJSON[i + 1];
-        }
-    }
-}
+//Token getValue(Token token) {
+//    for (int i = 0; i < _msize(tokensJSON) / sizeof(Token); ++i) {
+//        if (tokensJSON[i].start == token.start && tokensJSON[i].end == token.end) {
+//            return tokensJSON[i + 1];
+//        }
+//    }
+//}
 
 void printToken(Token token) {
     char *result;
@@ -495,64 +500,64 @@ void printToken(Token token) {
     printf(result);
 }
 
-Token *getChilds(Token token) {
-    if (token.size == 0 || token.size == 1)
-        return NULL;
-    Token *childs;
-    if (token.type == ARRAY) childs = calloc((size_t) token.size, sizeof(Token));
-    else childs = calloc((size_t) token.size * 2, sizeof(Token));
-    int countChild = 0;
-    int tempRightBorder = 0;
-    Token temp;
-    for (int i = 0; i < _msize(tokensJSON) / sizeof(Token); ++i) {
-        temp = tokensJSON[i];
-        if (temp.start > token.start && temp.end < token.end) {
-            if (temp.end > tempRightBorder) {
-                tempRightBorder = temp.end;
-                childs[countChild] = temp;
-                countChild++;
-            }
-        }
-    }
-    return childs;
-}
+//Token *getChilds(Token token) {
+//    if (token.size == 0 || token.size == 1)
+//        return NULL;
+//    Token *childs;
+//    if (token.type == ARRAY) childs = calloc((size_t) token.size, sizeof(Token));
+//    else childs = calloc((size_t) token.size * 2, sizeof(Token));
+//    int countChild = 0;
+//    int tempRightBorder = 0;
+//    Token temp;
+//    for (int i = 0; i < _msize(tokensJSON) / sizeof(Token); ++i) {
+//        temp = tokensJSON[i];
+//        if (temp.start > token.start && temp.end < token.end) {
+//            if (temp.end > tempRightBorder) {
+//                tempRightBorder = temp.end;
+//                childs[countChild] = temp;
+//                countChild++;
+//            }
+//        }
+//    }
+//    return childs;
+//}
 
-Token *getChildKeys(Token parent) {
-    Token *childs = getChilds(parent);
-    Token *childsKey;
-    int count = 0;
-    if (!childs)return NULL;
-    else {
-        for (int j = 0; j < _msize(childs) / sizeof(Token); ++j) {
-            if (childs[j].type == STRING && childs[j].size == 1) count++;
-        }
-        childsKey = calloc((size_t) count, sizeof(Token));
-        count = 0;
-        for (int i = 0; i < _msize(childs) / sizeof(Token); ++i) {
-            if (childs[i].type == STRING && childs[i].size == 1) {
-                childsKey[count] = childs[i];
-                count++;
-            }
-        }
-        return childsKey;
-    }
-}
+//Token *getChildKeys(Token parent) {
+//    Token *childs = getChilds(parent);
+//    Token *childsKey;
+//    int count = 0;
+//    if (!childs)return NULL;
+//    else {
+//        for (int j = 0; j < _msize(childs) / sizeof(Token); ++j) {
+//            if (childs[j].type == STRING && childs[j].size == 1) count++;
+//        }
+//        childsKey = calloc((size_t) count, sizeof(Token));
+//        count = 0;
+//        for (int i = 0; i < _msize(childs) / sizeof(Token); ++i) {
+//            if (childs[i].type == STRING && childs[i].size == 1) {
+//                childsKey[count] = childs[i];
+//                count++;
+//            }
+//        }
+//        return childsKey;
+//    }
+//}
 
-static char *getValueStr(char *key, char *str, Token *tokens, int count) {
-    char *a;
-    char *result = NULL;
-    for (int i = 0; i < count; ++i) {
-        int size = tokens[i].end - tokens[i].start;
-        subString(str, tokens[i].start, size, &a);
-        if (strcmp(key, a) == 0) {
-            size = tokens[i + 1].end - tokens[i + 1].start;
-            subString(str, tokens[i + 1].start, size, &result);
-        }
-    }
-    return result;
-}
+//static char *getValueStr(char *key, char *str, Token *tokens, int count) {
+//    char *a;
+//    char *result = NULL;
+//    for (int i = 0; i < count; ++i) {
+//        int size = tokens[i].end - tokens[i].start;
+//        subString(str, tokens[i].start, size, &a);
+//        if (strcmp(key, a) == 0) {
+//            size = tokens[i + 1].end - tokens[i + 1].start;
+//            subString(str, tokens[i + 1].start, size, &result);
+//        }
+//    }
+//    return result;
+//}
 
-static void subString(const char *string, int offset, int length, char **dst) {
+void subString(const char *string, int offset, int length, char **dst) {
     *dst = calloc((size_t) (length + 1), sizeof(char));
     for (int i = 0; i < length; ++i) {
         (*dst)[i] = string[offset + i];
@@ -588,7 +593,7 @@ Token *getJsonTokens() {
     return tokensJSON;
 }
 
-static void throwError(int error) {
+void throwError(int error) {
     switch (error) {
         case ERROR_ROOT_TOKEN:
             perror("Undefined JSON ROOT. A JSON payload should be an object or array");
@@ -627,7 +632,7 @@ static void throwError(int error) {
     exit(1);
 }
 
-static void init(Parser *parser) {
+void init(Parser *parser) {
     parser->position = 0;
     parser->toknext = 0;
     parser->toksuper = -1;

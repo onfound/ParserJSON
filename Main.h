@@ -7,6 +7,7 @@
 
 #include "Parser.h"
 
+static char *getStringType(TokenType tokenType);
 static void startDocument();
 static void endDocument();
 static void startElement(TokenType);
