@@ -47,8 +47,8 @@ typedef enum {
 } HelpState;
 
 typedef struct {
-    unsigned int position;
-    unsigned int toknext;
+    int position;
+    int toknext;
     int toksuper;
 } Parser;
 

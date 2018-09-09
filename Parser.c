@@ -22,9 +22,9 @@ static void (*endElementCallback)(TokenType tokenType);
 static void (*charactersCallback)(Token token);
 
 Token *alloc_token(Parser *parser,
-                          Token *tokens, size_t num_tokens) {
+                   Token *tokens, size_t num_tokens) {
     Token *tok;
-    if (parser->toknext >= num_tokens) {
+    if (parser->toknext >= (signed) num_tokens) {
         return NULL;
     }
     tok = &tokens[parser->toknext++];
@@ -43,11 +43,11 @@ static void fill_token(Token *token, TokenType type,
 }
 
 TokenError parse_different(Parser *parser, const char *js,
-                                  size_t len, Token *tokens, size_t num_tokens) {
+                           size_t len, Token *tokens, size_t num_tokens) {
     Token *token;
     int start = parser->position;
     TokenType tokenType;
-    for (; parser->position < len && js[parser->position] != '\0'; parser->position++) {
+    for (; parser->position < (signed) len && js[parser->position] != '\0'; parser->position++) {
         switch (js[parser->position]) {
             // определяем что токен не являющийся массиовм или объектом или
             // строкой завершился с помощью одного из следующих символов
@@ -92,7 +92,7 @@ TokenError parse_different(Parser *parser, const char *js,
     if (tokenType == NUMBER) {
         //проверяем валидность числа
         // 1) начинается с цифры или со знака минус
-        if (js[start] >= 0x30 && js[start] <= 0x39 || js[start] == '-') {
+        if (!(js[start] < 0x30 || js[start] > 0x39) || js[start] == '-') {
             // 2) если начинается с цифры 0 и если все число не является 0, то обязательно должна быть плавающая точка
             if (js[start] == '0' && start + 1 < parser->position && js[start + 1] != '.') return ERROR_NUMBER;
             //объявляем переменыые для уникальности одной точки в числе и експоненциальной формы
@@ -106,7 +106,7 @@ TokenError parse_different(Parser *parser, const char *js,
                 i = start;
             }
             // проверяем остальные числа
-            for (i; i < parser->position; ++i) {
+            for (; i < parser->position; ++i) {
                 // если это не последний символ и он равен точке - проверяем что точки еще не было и экспоненциалной формы,
                 // так как точка не может стоять после экспоненциальной формы, смещаемся если все норм :)
                 if (i < parser->position - 1 && js[i] == '.') {
@@ -133,28 +133,28 @@ TokenError parse_different(Parser *parser, const char *js,
 
     }
 
-
-//выделяем память под токен
+    //выделяем память под токен
     token = alloc_token(parser, tokens, num_tokens);
 
-//если выделенная память на кол-во токенов заполнена (исчерпали все кол-во токенов в аргументах парсера)
+    //если выделенная память на кол-во токенов заполнена (исчерпали все кол-во токенов в аргументах парсера)
     if (!token) {
         parser->position = start;
         return ERROR_NOMEM;
     }
 
-//если все норм, то заполняем токен
+    //если все норм, то заполняем токен
     fill_token(token, tokenType, start, parser->position);
-// откатываем позицию назад
+    // откатываем позицию назад
 
     endElementCallback(tokenType);
     parser->position--;
+
     return 0;
 }
 
 
 TokenError parse_string(Parser *parser, const char *js,
-                               size_t len, Token *tokens, size_t num_tokens) {
+                        size_t len, Token *tokens, size_t num_tokens) {
     //токен строки
     Token *token;
     int start = parser->position;
@@ -162,7 +162,7 @@ TokenError parse_string(Parser *parser, const char *js,
     if (tokens) {
         startElementCallback(STRING);
     }
-    for (; parser->position < len && js[parser->position] != '\0'; parser->position++) {
+    for (; parser->position < (signed) len && js[parser->position] != '\0'; parser->position++) {
         //символ строки
         char c = js[parser->position];
         if (c == '\t' || c == '\n') {
@@ -186,7 +186,7 @@ TokenError parse_string(Parser *parser, const char *js,
             return 0;
         }
         // если нашли обратный слэш и после него есть какой то символ
-        if (c == '\\' && parser->position + 1 < len) {
+        if (c == '\\' && parser->position + 1 < (signed) len) {
             int i;
             parser->position++;
             switch (js[parser->position]) {
@@ -196,16 +196,16 @@ TokenError parse_string(Parser *parser, const char *js,
                 case 'b' :
                 case 'f' :
                 case 'r' :
-                case 'n'  :
+                case 'n' :
                 case 't' :
                     break;
                 case 'u':
                     parser->position++;
-                    for (i = 0; i < 4 && parser->position < len && js[parser->position] != '\0'; i++) {
+                    for (i = 0; i < 4 && parser->position < (signed) len && js[parser->position] != '\0'; i++) {
                         if (!((js[parser->position] >= 48 && js[parser->position] <= 57) || /* проверяем 0-9 */
                               (js[parser->position] >= 65 && js[parser->position] <= 70) || /* проверяем A-F */
                               (js[parser->position] >= 97 && js[parser->position] <= 102))) { /* проверяем a-f */
-                            parser->position = start;
+                            parser->position = (unsigned int) start;
                             return ERROR_INVAL;
                         }
                         parser->position++;
@@ -218,12 +218,12 @@ TokenError parse_string(Parser *parser, const char *js,
             }
         }
     }
-    parser->position = start;
+    parser->position = (unsigned int) start;
     return ERROR_PART;
 }
 
 TokenError parse(Parser *parser, const char *js, size_t len,
-                        Token *tokens, unsigned int countTokens) {
+                 Token *tokens, unsigned int countTokens) {
     HelpState helpState = UNDEFINED;
     TokenError r;
     int i;
@@ -233,7 +233,7 @@ TokenError parse(Parser *parser, const char *js, size_t len,
     if (tokens)
         startDocumentCallback();
     //пока не уткнулись в конец строки или не превысили указанный диапазон строки передвигаемся посимвольно
-    for (; parser->position < len && js[parser->position] != '\0'; parser->position++) {
+    for (; parser->position < (signed) len && js[parser->position] != '\0'; parser->position++) {
         //определяем тип токена
         TokenType type;
         //текущий символ
@@ -286,13 +286,14 @@ TokenError parse(Parser *parser, const char *js, size_t len,
                     tokenTemp = &tokens[i];
                     // если начало существует а конец еще не определен
                     if (tokenTemp->start != -1 && tokenTemp->end == -1) {
-                        // если найденный тип не соответсвует  Пример: {[ }]  скобка закончилась раньше
+                        // если найденный тип не соответсвует Пример: {[ }] скобка закончилась раньше
                         if (tokenTemp->type != type) {
                             return ERROR_PART;
                         }
                         // сбрасываем текущий обрабатываемый токен
                         parser->toksuper = -1;
                         // устанавливаем конец токена в строке
+
                         tokenTemp->end = parser->position + 1;
                         charactersCallback(*tokenTemp);
                         break;
@@ -310,8 +311,7 @@ TokenError parse(Parser *parser, const char *js, size_t len,
                         break;
                     }
                 }
-                if (c == '{')endElementCallback(OBJECT);
-                else endElementCallback(ARRAY);
+                endElementCallback(ARRAY);
                 break;
                 // Если нашли кавычку
             case '\"':
@@ -329,11 +329,11 @@ TokenError parse(Parser *parser, const char *js, size_t len,
                 if (helpState == UNDEFINED && tokens[parser->toksuper].type == OBJECT) helpState = COMMA;
                 if (tokens[parser->toksuper].type == OBJECT) {
                     if (helpState == COMMA) helpState = KEY;
-                    else if (!helpState == COLUMN)
+                    else if (helpState != COLUMN)
                         return ERROR_OBJECT_PART;
                 }
                 // если режим не подсчета токенов и предок есть то увеличиваем кол-во чайлдов
-                if (parser->toksuper != -1 && tokens)
+                if (parser->toksuper != -1)
                     tokens[parser->toksuper].size++;
                 endElementCallback(STRING);
                 break;
@@ -346,7 +346,7 @@ TokenError parse(Parser *parser, const char *js, size_t len,
                 // нашли разделитель между ключем и значением
             case ':':
                 //ставим родителя как предпоследний токен
-//                parser->toksuper = parser->toknext - 1;
+                // parser->toksuper = parser->toknext - 1;
                 if (!tokens)break;
                 if (tokens[parser->toksuper].type != OBJECT) return ERROR_CHARACTER;
                 if (helpState == KEY) helpState = COLUMN;
@@ -389,13 +389,13 @@ TokenError parse(Parser *parser, const char *js, size_t len,
                 break;
         }
     }
-// если режим не поиска кол-ва токенов то проверяем корневой токен на тип
+    // если режим не поиска кол-ва токенов то проверяем корневой токен на тип
     if (tokens && (tokens[0].type != OBJECT && tokens[0].type != ARRAY && tokens[0].type != TRUE_VALUE
                    && tokens[0].type != FALSE_VALUE && tokens[0].type != NULL_VALUE)) {
         return ERROR_ROOT_TOKEN;
     }
-// пробегаемся по всем токенам если они есть и проверяем на завершенность обработки
-// токенов
+    // пробегаемся по всем токенам если они есть и проверяем на завершенность обработки
+    // токенов
     for (i = parser->toknext - 1; i >= 0; i--) {
         if (tokens[i].start != -1 && tokens[i].end == -1) {
             return ERROR_PART;
@@ -406,6 +406,7 @@ TokenError parse(Parser *parser, const char *js, size_t len,
     return count;
 }
 
+
 char *parseFromFile(char name[]) {
     FILE *fp;
     char line[N];
@@ -414,7 +415,7 @@ char *parseFromFile(char name[]) {
     memset(refactorLine, 0, sizeof refactorLine);
     int startName = 0;
     fp = fopen(name, "r");
-    if (fp == NULL){
+    if (fp == NULL) {
         perror("File not found");
         exit(1);
     }
@@ -497,7 +498,7 @@ void printToken(Token token) {
     char *result;
     int size = token.end - token.start;
     subString(document, token.start, size, &result);
-    printf(result);
+    printf("%s", result);
 }
 
 //Token *getChilds(Token token) {
@@ -581,12 +582,14 @@ Token *getJsonTokens() {
         throwError(count);
     }
     // выделяем память для массива токенов
-    tokensJSON = calloc(count, sizeof(Token));
+    tokensJSON = calloc((size_t) count, sizeof(Token));
     if (!tokensJSON) {
         throwError(ERROR_ALLOCATE);
     }
     init(&p);
-    err = parse(&p, jsonLine, strlen(jsonLine), tokensJSON, count);
+    err = parse(&p,
+
+                jsonLine, strlen(jsonLine), tokensJSON, (unsigned int) count);
     if (err < 0) {
         throwError(err);
     }

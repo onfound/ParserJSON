@@ -42,14 +42,14 @@ static void endDocument() {
 
 static void startElement(TokenType tokenType) {
     printf("startElement. Type = ");
-    printf(getStringType(tokenType));
+    printf("%s", getStringType(tokenType));
     printf("\n");
 }
 
 static void endElement(TokenType tokenType) {
     getStringType(tokenType);
     printf("endElement. Type = ");
-    printf(getStringType(tokenType));
+    printf("%s", getStringType(tokenType));
     printf("\n");
 }
 
@@ -59,18 +59,18 @@ static void characters(Token token) {
     printf("\n");
 }
 
-int main(void) {
+int main(int argc, char *argv[]) {
 
     /**
      * SAX ParserJSON
      **/
 
-//    if (argc != 2){
-//        perror("Does not match the format of the input command. \n For example: \"parser C:\\Users\\ilya\\Desktop\\testForJson\\pass1.json\"");
-//        return 1;
-//    }
-    getJSON("C:\\Users\\ilyad\\CLionProjects\\ParserJSON\\testsJSON\\fail1.json", startDocument,
-                         endDocument, startElement, endElement, characters);
+    if (argc != 2) {
+        perror("Does not match the format of the input command. \n For example: \"parser C:\\Users\\ilya\\Desktop\\testForJson\\pass1.json\"");
+        return 1;
+    }
+    getJSON(argv[1], startDocument,
+            endDocument, startElement, endElement, characters);
 
 
     return 0;
