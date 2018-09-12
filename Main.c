@@ -22,16 +22,17 @@ static char *getStringType(TokenType tokenType) {
         case FALSE_VALUE:
             return "FALSE";
         default:
-            perror("");
+            perror("UNDEFINED TOKEN TYPE");
             exit(1);
     }
 }
+
 /**
  * Прерываем программу с помощью ввода данных
  * */
 static void interrupt() {
     int c = getchar();
-    while (c != '\n'){
+    while (c != '\n') {
         c = getchar();
     }
 }
@@ -69,7 +70,6 @@ static void characters(Token token) {
 }
 
 
-
 int main(int argc, char *argv[]) {
 
     /**
@@ -77,13 +77,13 @@ int main(int argc, char *argv[]) {
      **/
 
     if (argc != 2) {
-        perror("Does not match the format of the input command. \n For example: \"parser C:\\Users\\ilya\\Desktop\\testForJson\\fail1.json\"");
+        perror("Does not match the format of the input command. \n For example: \"parser C:\\Users\\ilya\\Desktop\\testForJson\\pass1.json\"");
         return 1;
     }
-    getJSON(argv[1], startDocument,
-            endDocument, startElement, endElement, characters);
+    Token token = getJSON(argv[1], startDocument,
+                          endDocument, startElement, endElement, characters);
+    printToken(*getNextToken(token));
     freeParserJSON();
-
     return 0;
 }
 

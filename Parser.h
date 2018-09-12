@@ -52,39 +52,15 @@ typedef struct {
     int toksuper;
 } Parser;
 
-void trim(char *line, char *y, int *startName);
-
-char *concat(char *s1, char *s2);
-
-char *parseFromFile(char name[]);
-
-void init(Parser *parser);
-
-char *getJsonInline(char *path);
-
-Token *getJsonTokens();
-
 void freeParserJSON();
 
-//Token *getChildKeys(Token parent);
+Token *getNextToken(Token token);
 
 void printToken(Token token);
-
-//Token *getChilds(Token token);
-
-//Token getValue(Token token);
-
-void throwError(int error);
-
-//static char *getValueStr(char *key, char *str, Token *tokens, int count);
 
 Token getJSON(char *JSON, void (*startDocument)(), void (*endDocument)()
         , void (*startElement)(TokenType), void (*endElement)(TokenType), void (*characters)(Token));
 
-void subString(const char *string, int offset, int length, char **dst);
-
-TokenError parse(Parser *parser, const char *js, size_t len,
-                 Token *tokens, unsigned int countTokens);
 
 #endif
 
