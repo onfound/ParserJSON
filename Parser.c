@@ -3,7 +3,7 @@
 //
 
 #include <stdlib.h>
-#include <mem.h>
+#include <string.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include "Parser.h"
@@ -477,7 +477,7 @@ static char *getJsonInline(char *path) {
 
 
 Token *getNextToken(Token token) {
-    for (int i = 0; i < (signed) (_msize(tokensJSON) / sizeof(Token)); ++i) {
+    for (int i = 0; i < (signed) (sizeof(tokensJSON) / sizeof(Token)); ++i) {
         if (tokensJSON[i].start == token.start && tokensJSON[i].end == token.end) {
             return &tokensJSON[i + 1];
         }
