@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
      **/
 
     if (argc != 2) {
-        perror("Does not match the format of the input command. \n For example: \"parser C:\\Users\\ilya\\Desktop\\testForJson\\pass1.json\"");
+        perror("Does not match the format of the input command. \n For example: \"parser C:\\Users\\ilya\\Desktop\\testForJson\\fail1.json\"");
         return 1;
     }
     getJSON(argv[1], startDocument,
