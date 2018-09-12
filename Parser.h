@@ -29,7 +29,7 @@ typedef enum {
     ERROR_NOMEM = -7,
     ERROR_INVAL = -8,
     ERROR_PART = -9,
-    ERROR_ALLOCATE = -10
+    ERROR_UNDEFINED = -10
 } TokenError;
 
 typedef struct {

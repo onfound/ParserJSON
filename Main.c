@@ -69,7 +69,6 @@ static void characters(Token token) {
     interrupt();
 }
 
-
 int main(int argc, char *argv[]) {
 
     /**
@@ -86,5 +85,3 @@ int main(int argc, char *argv[]) {
     freeParserJSON();
     return 0;
 }
-
-

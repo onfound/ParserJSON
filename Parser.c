@@ -50,7 +50,7 @@ static void subString(const char *string, int offset, int length, char **dst) {
 }
 
 
-static TokenError parse_different(Parser *parser, const char *js,
+static int parse_different(Parser *parser, const char *js,
                            size_t len, Token *tokens, size_t num_tokens) {
     Token *token;
     int start = parser->position;
@@ -160,7 +160,7 @@ static TokenError parse_different(Parser *parser, const char *js,
     return 0;
 }
 
-static TokenError parse_string(Parser *parser, const char *js,
+static int parse_string(Parser *parser, const char *js,
                         size_t len, Token *tokens, size_t num_tokens) {
     //токен строки
     Token *token;
@@ -230,7 +230,7 @@ static TokenError parse_string(Parser *parser, const char *js,
 }
 
 
-static TokenError parse(Parser *parser, const char *js, size_t len,
+static int parse(Parser *parser, const char *js, size_t len,
                  Token *tokens, unsigned int countTokens) {
     HelpState helpState = UNDEFINED;
     TokenError r;
@@ -325,7 +325,7 @@ static TokenError parse(Parser *parser, const char *js, size_t len,
             case '\"':
 
                 // проверяем строку
-                r = parse_string(parser, js, len, tokens, countTokens);
+                r = (TokenError) parse_string(parser, js, len, tokens, countTokens);
                 if (r < 0)return r;
 
                 // если поймали ошибку в формате строки то возвращаем код ошибки
@@ -387,7 +387,7 @@ static TokenError parse(Parser *parser, const char *js, size_t len,
                 //если нашли что то другое
             default:
                 //пробуем определить что это число/true/false/null
-                r = parse_different(parser, js, len, tokens, countTokens);
+                r = (TokenError) parse_different(parser, js, len, tokens, countTokens);
                 if (r < 0) return r;
                 //увеличиваем кол-во токенов если режим подсчета
                 count++;
@@ -415,7 +415,7 @@ static TokenError parse(Parser *parser, const char *js, size_t len,
 }
 
 
-static void trim(char *line, char *y, int *startName) {
+static void trim(const char *line, char *y, int *startName) {
     int newSize = N;
     for (int i = 0; i < N; ++i) {
         if (line[i] != '\n' || *startName == 1) {
@@ -503,39 +503,45 @@ static void throwError(int error) {
     switch (error) {
         case ERROR_ROOT_TOKEN:
             perror("Undefined JSON ROOT. A JSON payload should be an object or array");
+            exit(ERROR_ROOT_TOKEN);
             break;
         case ERROR_NUMBER:
             perror("The number must be in the correct form");
+            exit(ERROR_NUMBER);
             break;
         case ERROR_BACKSLASH:
             perror("Undefined control character");
+            exit(ERROR_BACKSLASH);
             break;
         case ERROR_NOMEM:
             perror("cant allocate memory for tokens");
+            exit(ERROR_NOMEM);
             break;
         case ERROR_INVAL:
             perror("Illegal Arguments!");
+            exit(ERROR_INVAL);
             break;
         case ERROR_PART:
-            perror("Uncorret part");
+            perror("Incorrect part");
+            exit(ERROR_PART);
             break;
         case ERROR_CHARACTER:
             perror("Undefined character ':'");
+            exit(ERROR_CHARACTER);
             break;
         case ERROR_OBJECT_PART:
             perror("Object in JSON should be {\"key\": value, \"key\":value}");
+            exit(ERROR_OBJECT_PART);
             break;
         case ERROR_STRING:
             perror("String is broken");
-            break;
-        case ERROR_ALLOCATE:
-            perror("Can't allocate memory for tokens!");
-            break;
+            exit(ERROR_STRING);
+            break;;
         default:
             perror("Unsupported Error");
+            exit(ERROR_UNDEFINED);
             break;
     }
-    exit(1);
 }
 
 /**
@@ -557,7 +563,7 @@ static Token *getJsonTokens() {
     // выделяем память для массива токенов
     tokensJSON = calloc((size_t) count, sizeof(Token));
     if (!tokensJSON) {
-        throwError(ERROR_ALLOCATE);
+        throwError(ERROR_NOMEM);
     }
     init(&p);
     err = parse(&p, jsonLine, strlen(jsonLine), tokensJSON, (unsigned int) count);
