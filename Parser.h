@@ -64,6 +64,8 @@ char *getJsonInline(char *path);
 
 Token *getJsonTokens();
 
+void freeParserJSON();
+
 //Token *getChildKeys(Token parent);
 
 void printToken(Token token);

@@ -13,6 +13,7 @@ static void endDocument();
 static void startElement(TokenType);
 static void endElement(TokenType);
 static void characters(Token token);
+static void interrupt();
 
 
 #endif //PARSERJSON_MAIN_H

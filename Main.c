@@ -26,38 +26,49 @@ static char *getStringType(TokenType tokenType) {
             exit(1);
     }
 }
+/**
+ * Прерываем программу с помощью ввода данных
+ * */
+static void interrupt() {
+    int c = getchar();
+    while (c != '\n'){
+        c = getchar();
+    }
+}
 
 /**
  * implements require for callback notify event
  */
 static void startDocument() {
     printf("starDocument");
-    printf("\n");
+    interrupt();
 }
 
 static void endDocument() {
     printf("endDocument");
-    printf("\n");
+    interrupt();
 }
 
 static void startElement(TokenType tokenType) {
     printf("startElement. Type = ");
     printf("%s", getStringType(tokenType));
-    printf("\n");
+    interrupt();
 }
 
 static void endElement(TokenType tokenType) {
     getStringType(tokenType);
     printf("endElement. Type = ");
     printf("%s", getStringType(tokenType));
-    printf("\n");
+    interrupt();
 }
 
 static void characters(Token token) {
     printf("characters >>> ");
     printToken(token);
-    printf("\n");
+    interrupt();
 }
+
+
 
 int main(int argc, char *argv[]) {
 
@@ -71,7 +82,7 @@ int main(int argc, char *argv[]) {
     }
     getJSON(argv[1], startDocument,
             endDocument, startElement, endElement, characters);
-
+    freeParserJSON();
 
     return 0;
 }

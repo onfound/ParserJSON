@@ -456,7 +456,7 @@ char *concat(char *s1, char *s2) {
     size_t len2 = strlen(s2);
     char *result = calloc((size_t) len1 + len2 + 1, sizeof(char));
     if (!result) {
-        fprintf(stderr, "malloc() failed: insufficient memory!\n");
+        fprintf(stderr, "calloc() failed: insufficient memory!\n");
         return NULL;
     }
     memcpy(result, s1, len1);
@@ -499,6 +499,7 @@ void printToken(Token token) {
     int size = token.end - token.start;
     subString(document, token.start, size, &result);
     printf("%s", result);
+    free(result);
 }
 
 //Token *getChilds(Token token) {
@@ -587,9 +588,7 @@ Token *getJsonTokens() {
         throwError(ERROR_ALLOCATE);
     }
     init(&p);
-    err = parse(&p,
-
-                jsonLine, strlen(jsonLine), tokensJSON, (unsigned int) count);
+    err = parse(&p, jsonLine, strlen(jsonLine), tokensJSON, (unsigned int) count);
     if (err < 0) {
         throwError(err);
     }
@@ -633,6 +632,11 @@ void throwError(int error) {
             break;
     }
     exit(1);
+}
+
+void freeParserJSON(){
+    free(tokensJSON);
+    free(document);
 }
 
 void init(Parser *parser) {
